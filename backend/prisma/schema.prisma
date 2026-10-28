@@ -242,6 +242,7 @@ updatedAt   DateTime           @updatedAt @map("updated_at")
 customer    User               @relation(fields: [customerId], references: [id], onDelete: Cascade)
 product     Product            @relation(fields: [productId], references: [id])
 
+@@unique([customerId, productId])
 @@map("customer_subscriptions")
 }
 
