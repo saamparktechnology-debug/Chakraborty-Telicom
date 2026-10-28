@@ -1,0 +1,170 @@
+openapi: 3.1.0
+info:
+  title: Amul Party Distribution & Subscription Management Platform API
+  version: 1.0.0
+  description: >
+    Production REST API for B2B Dairy Supply Chain, Split-Payment Instant Billing,
+    Khata Ledger, and B2C Prepaid Milk Subscription Wallet.
+servers:
+  - url: https://api.amulparty.example.com/api
+    description: Production HTTPS Server
+  - url: http://localhost:4000/api
+    description: Local Development Server
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: amul_access_token
+security:
+  - bearerAuth: []
+  - cookieAuth: []
+paths:
+  /auth/login:
+    post:
+      summary: Unified phone + password login (Admin, DSE, Retailer, Customer)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, password]
+              properties:
+                phone: { type: string, example: "9999999990" }
+                password: { type: string, example: "Amul@2026!" }
+                totpCode: { type: string, example: "123456" }
+      responses:
+        "200":
+          description: Authenticated session token and user profile
+        "401":
+          description: Invalid credentials or account locked
+  /users/onboard:
+    post:
+      summary: Onboard DSE (Admin only), Retailer (with/without DSE), or Customer (with initial subscription)
+      responses:
+        "201": { description: User onboarded with initialized balance/wallet }
+        "403": { description: Forbidden by RBAC }
+  /users/dse:
+    get:
+      summary: List DSEs with assigned retailer/customer counts and today's cash/UPI totals (Admin only)
+      responses:
+        "200": { description: DSE list and reconciliation metrics }
+  /users/retailers:
+    get:
+      summary: List retailers with current due (?directOnly=true for Direct Retailers without DSE)
+      parameters:
+        - in: query
+          name: directOnly
+          schema: { type: boolean }
+      responses:
+        "200": { description: Retailers list with current due }
+  /users/customers:
+    get:
+      summary: List customers with wallet balance, active subscriptions, and tomorrow's skip status
+      responses:
+        "200": { description: Customer directory }
+  /products:
+    get:
+      summary: Get active product palette (All authenticated roles)
+      responses:
+        "200": { description: List of products }
+    post:
+      summary: Add a new product to the palette (Admin only)
+      responses:
+        "201": { description: Product created }
+  /products/{id}:
+    put:
+      summary: Update product prices, crate conversion, or availability (Admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Product updated }
+  /retailer-orders/indent:
+    post:
+      summary: Record next-day order indent (DSE, Admin)
+      responses:
+        "201": { description: Indent saved with status INDENTED }
+  /retailer-orders/{id}/instant-bill:
+    post:
+      summary: Convert indent to delivered bill with adjusted quantities and split UPI+Cash payment (Atomic Transaction)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Atomic invoice debit, UPI/cash credits, and closing due recorded }
+  /retailer-orders/spot-bill:
+    post:
+      summary: Instant delivery billing without prior indent (DSE, Admin)
+      responses:
+        "201": { description: Spot bill generated atomically }
+  /retailer-orders/collect-due:
+    post:
+      summary: Collect standalone Cash / UPI payment against existing retailer due (DSE, Admin)
+      responses:
+        "200": { description: Payment credit ledger entries recorded and due reduced }
+  /retailer-orders/retailer/{retailerId}:
+    get:
+      summary: Retailer order history, itemised bills, and chronological Khata passbook (Retailer own only, DSE, Admin)
+      parameters:
+        - in: path
+          name: retailerId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Order history and Khata ledger }
+  /customers/{id}/wallet-topup:
+    post:
+      summary: Top up customer prepaid wallet balance (Admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Wallet balance incremented and WALLET_TOPUP_CREDIT entry created }
+  /customers/{id}/dashboard:
+    get:
+      summary: Customer wallet balance, active subscriptions, skip days, deductions, and periodic bills (Customer own only, DSE, Admin)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Customer dashboard payload }
+  /customers/skip-days/toggle:
+    post:
+      summary: Toggle a future delivery date as Skip — Not Needed (Customer, cut-off enforced)
+      responses:
+        "200": { description: Skip date toggled }
+  /customers/deliveries/confirm:
+    post:
+      summary: Confirm daily milk delivery and auto-deduct from customer wallet (DSE, Admin)
+      responses:
+        "200": { description: Delivery confirmed and DAILY_DELIVERY_DEBIT recorded atomically }
+  /customers/{id}/send-bill:
+    post:
+      summary: Generate and dispatch periodic customer statement for a date range (Admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "201": { description: Periodic statement generated and stored }
+  /analytics/overview:
+    get:
+      summary: Executive Analytics Dashboard KPIs, DSE collections, next-day loading sheet, 14-day trend, and overdue retailers (Admin only)
+      responses:
+        "200": { description: Complete analytics overview }

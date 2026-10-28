@@ -1,0 +1,337 @@
+generator client {
+provider = "prisma-client-js"
+}
+
+datasource db {
+provider = "mysql"
+url      = env("DATABASE_URL")
+}
+
+enum Role {
+ADMIN
+DSE
+RETAILER
+CUSTOMER
+}
+
+enum ProductUnitType {
+Pouch
+Crate
+Box
+Kg
+}
+
+enum OrderStatus {
+INDENTED
+OUT_FOR_DELIVERY
+DELIVERED
+CANCELLED
+}
+
+enum SubscriptionStatus {
+ACTIVE
+PAUSED
+}
+
+enum LedgerEntryType {
+INVOICE_DEBIT
+PAYMENT_CASH_CREDIT
+PAYMENT_UPI_CREDIT
+WALLET_TOPUP_CREDIT
+DAILY_DELIVERY_DEBIT
+MANUAL_ADJUSTMENT
+}
+
+enum StockMovementType {
+AMUL_INWARD
+DSE_ALLOCATION
+DSE_RETURN
+RETAILER_SALE_DEDUCTION
+CUSTOMER_DROP_DEDUCTION
+}
+
+model User {
+id                  String    @id @default(uuid())
+role                Role
+name                String
+shopName            String?   @map("shop_name")
+phone               String    @unique @db.VarChar(15)
+email               String?   @unique
+passwordHash        String    @map("password_hash")
+assignedDseId       String?   @map("assigned_dse_id")
+createdById         String?   @map("created_by_id")
+address             String?   @db.Text
+isActive            Boolean   @default(true) @map("is_active")
+emailVerified       Boolean   @default(false) @map("email_verified")
+mfaEnabled          Boolean   @default(false) @map("mfa_enabled")
+mfaSecret           String?   @map("mfa_secret")
+failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
+lockedUntil         DateTime? @map("locked_until")
+createdAt           DateTime  @default(now()) @map("created_at")
+updatedAt           DateTime  @updatedAt @map("updated_at")
+
+assignedDse         User?     @relation("DseAssignment", fields: [assignedDseId], references: [id], onDelete: SetNull)
+assignedUsers       User[]    @relation("DseAssignment")
+
+retailerBalance     RetailerBalance?
+customerWallet      CustomerWallet?
+retailerOrders      RetailerOrder[]        @relation("RetailerOrders")
+dseHandledOrders    RetailerOrder[]        @relation("DseHandledOrders")
+subscriptions       CustomerSubscription[]
+skipDays            CustomerSkipDay[]
+customerDeliveries  CustomerDailyDelivery[] @relation("CustomerDeliveries")
+dseDeliveries       CustomerDailyDelivery[] @relation("DseDeliveries")
+monthlyBills        CustomerMonthlyBill[]
+ledgerEntries       LedgerTransaction[]    @relation("AccountHolderLedger")
+recordedLedgers     LedgerTransaction[]    @relation("RecordedByLedger")
+authSessions        AuthSession[]
+dseStocks           DseStock[]             @relation("DseVehicleStocks")
+dseStockMovements   StockMovement[]        @relation("DseStockMovements")
+recordedMovements   StockMovement[]        @relation("ActorStockMovements")
+
+@@index([role])
+@@index([assignedDseId])
+@@map("users")
+}
+
+model Product {
+id                  String          @id @default(uuid())
+skuCode             String          @unique @map("sku_code") @db.VarChar(64)
+name                String
+category            String          @db.VarChar(64)
+unitType            ProductUnitType @default(Pouch) @map("unit_type")
+unitsPerCrate       Int             @default(24) @map("units_per_crate")
+retailerPrice       Decimal         @map("retailer_price") @db.Decimal(12, 2)
+customerPrice       Decimal         @map("customer_price") @db.Decimal(12, 2)
+gstPercentage       Decimal         @default(0.00) @map("gst_percentage") @db.Decimal(5, 2)
+godownStockQty      Int             @default(0) @map("godown_stock_qty")
+imageUrl            String?         @map("image_url")
+imageFrontUrl       String?         @map("image_front_url")
+imageBackUrl        String?         @map("image_back_url")
+imageLeftUrl        String?         @map("image_left_url")
+imageRightUrl       String?         @map("image_right_url")
+isAvailable         Boolean         @default(true) @map("is_available")
+createdAt           DateTime        @default(now()) @map("created_at")
+updatedAt           DateTime        @updatedAt @map("updated_at")
+
+orderItems          RetailerOrderItem[]
+subscriptions       CustomerSubscription[]
+dailyDeliveries     CustomerDailyDelivery[]
+dseStocks           DseStock[]
+stockMovements      StockMovement[]
+
+@@map("products")
+}
+
+model DseStock {
+id          String   @id @default(uuid())
+dseId       String   @map("dse_id")
+productId   String   @map("product_id")
+liveQty     Int      @default(0) @map("live_qty")
+updatedAt   DateTime @updatedAt @map("updated_at")
+
+dse         User     @relation("DseVehicleStocks", fields: [dseId], references: [id], onDelete: Cascade)
+product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+@@unique([dseId, productId])
+@@index([dseId])
+@@map("dse_stocks")
+}
+
+model StockMovement {
+id                  String            @id @default(uuid())
+productId           String            @map("product_id")
+dseId               String?           @map("dse_id")
+recordedById        String            @map("recorded_by_id")
+movementType        StockMovementType @map("movement_type")
+quantity            Int
+godownBalanceAfter  Int               @map("godown_balance_after")
+dseBalanceAfter     Int?              @map("dse_balance_after")
+referenceId         String?           @map("reference_id")
+notes               String?           @db.Text
+createdAt           DateTime          @default(now()) @map("created_at")
+
+product             Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+dse                 User?             @relation("DseStockMovements", fields: [dseId], references: [id], onDelete: SetNull)
+recordedBy          User              @relation("ActorStockMovements", fields: [recordedById], references: [id])
+
+@@index([productId, createdAt])
+@@index([dseId, createdAt])
+@@map("stock_movements")
+}
+
+model RetailerBalance {
+id          String   @id @default(uuid())
+retailerId  String   @unique @map("retailer_id")
+currentDue  Decimal  @default(0.00) @map("current_due") @db.Decimal(14, 2)
+updatedAt   DateTime @updatedAt @map("updated_at")
+
+retailer    User     @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+
+@@map("retailer_balances")
+}
+
+model CustomerWallet {
+id            String   @id @default(uuid())
+customerId    String   @unique @map("customer_id")
+walletBalance Decimal  @default(0.00) @map("wallet_balance") @db.Decimal(14, 2)
+updatedAt     DateTime @updatedAt @map("updated_at")
+
+customer      User     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+@@map("customer_wallets")
+}
+
+model RetailerOrder {
+id                  String      @id @default(uuid())
+invoiceNumber       String      @unique @map("invoice_number") @db.VarChar(64)
+retailerId          String      @map("retailer_id")
+dseId               String?     @map("dse_id")
+deliveryDate        DateTime    @map("delivery_date")
+status              OrderStatus @default(INDENTED)
+isGstBill           Boolean     @default(false) @map("is_gst_bill")
+previousDueSnapshot Decimal     @default(0.00) @map("previous_due_snapshot") @db.Decimal(14, 2)
+taxableSubtotal     Decimal     @default(0.00) @map("taxable_subtotal") @db.Decimal(14, 2)
+gstAmount           Decimal     @default(0.00) @map("gst_amount") @db.Decimal(14, 2)
+subtotal            Decimal     @default(0.00) @db.Decimal(14, 2)
+totalPayable        Decimal     @default(0.00) @map("total_payable") @db.Decimal(14, 2)
+paidUpi             Decimal     @default(0.00) @map("paid_upi") @db.Decimal(14, 2)
+paidCash            Decimal     @default(0.00) @map("paid_cash") @db.Decimal(14, 2)
+closingDue          Decimal     @default(0.00) @map("closing_due") @db.Decimal(14, 2)
+idempotencyKey      String?     @unique @map("idempotency_key") @db.VarChar(80)
+billedAt            DateTime?   @map("billed_at")
+createdAt           DateTime    @default(now()) @map("created_at")
+updatedAt           DateTime    @updatedAt @map("updated_at")
+
+retailer            User                @relation("RetailerOrders", fields: [retailerId], references: [id])
+dse                 User?               @relation("DseHandledOrders", fields: [dseId], references: [id])
+items               RetailerOrderItem[]
+
+@@index([retailerId, deliveryDate])
+@@index([dseId, status])
+@@map("retailer_orders")
+}
+
+model RetailerOrderItem {
+id            String        @id @default(uuid())
+orderId       String        @map("order_id")
+productId     String        @map("product_id")
+indentedQty   Int           @default(0) @map("indented_qty")
+deliveredQty  Int           @default(0) @map("delivered_qty")
+unitPrice     Decimal       @map("unit_price") @db.Decimal(12, 2)
+gstPercentage Decimal       @default(0.00) @map("gst_percentage") @db.Decimal(5, 2)
+taxableAmount Decimal       @default(0.00) @map("taxable_amount") @db.Decimal(14, 2)
+gstAmount     Decimal       @default(0.00) @map("gst_amount") @db.Decimal(14, 2)
+lineTotal     Decimal       @default(0.00) @map("line_total") @db.Decimal(14, 2)
+
+order         RetailerOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+product       Product       @relation(fields: [productId], references: [id])
+
+@@map("retailer_order_items")
+}
+
+model CustomerSubscription {
+id          String             @id @default(uuid())
+customerId  String             @map("customer_id")
+productId   String             @map("product_id")
+dailyQty    Int                @default(1) @map("daily_qty")
+status      SubscriptionStatus @default(ACTIVE)
+createdAt   DateTime           @default(now()) @map("created_at")
+updatedAt   DateTime           @updatedAt @map("updated_at")
+
+customer    User               @relation(fields: [customerId], references: [id], onDelete: Cascade)
+product     Product            @relation(fields: [productId], references: [id])
+
+@@map("customer_subscriptions")
+}
+
+model CustomerSkipDay {
+id          String   @id @default(uuid())
+customerId  String   @map("customer_id")
+skipDate    DateTime @map("skip_date")
+reason      String?  @db.VarChar(255)
+createdAt   DateTime @default(now()) @map("created_at")
+
+customer    User     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+@@unique([customerId, skipDate])
+@@index([customerId, skipDate])
+@@map("customer_skip_days")
+}
+
+model CustomerDailyDelivery {
+id                 String   @id @default(uuid())
+customerId         String   @map("customer_id")
+dseId              String?  @map("dse_id")
+deliveryDate       DateTime @map("delivery_date")
+productId          String   @map("product_id")
+deliveredQty       Int      @map("delivered_qty")
+isGstBill          Boolean  @default(false) @map("is_gst_bill")
+gstPercentage      Decimal  @default(0.00) @map("gst_percentage") @db.Decimal(5, 2)
+taxableAmount      Decimal  @default(0.00) @map("taxable_amount") @db.Decimal(14, 2)
+gstAmount          Decimal  @default(0.00) @map("gst_amount") @db.Decimal(14, 2)
+deductedAmount     Decimal  @map("deducted_amount") @db.Decimal(14, 2)
+walletBalanceAfter Decimal  @map("wallet_balance_after") @db.Decimal(14, 2)
+createdAt          DateTime @default(now()) @map("created_at")
+
+customer           User     @relation("CustomerDeliveries", fields: [customerId], references: [id], onDelete: Cascade)
+dse                User?    @relation("DseDeliveries", fields: [dseId], references: [id])
+product            Product  @relation(fields: [productId], references: [id])
+
+@@index([customerId, deliveryDate])
+@@map("customer_daily_deliveries")
+}
+
+model CustomerMonthlyBill {
+id               String   @id @default(uuid())
+billNumber       String   @unique @map("bill_number") @db.VarChar(64)
+customerId       String   @map("customer_id")
+periodStart      DateTime @map("period_start")
+periodEnd        DateTime @map("period_end")
+isGstBill        Boolean  @default(false) @map("is_gst_bill")
+taxableAmount    Decimal  @default(0.00) @map("taxable_amount") @db.Decimal(14, 2)
+gstAmount        Decimal  @default(0.00) @map("gst_amount") @db.Decimal(14, 2)
+deliveriesAmount Decimal  @map("deliveries_amount") @db.Decimal(14, 2)
+topupsAmount     Decimal  @map("topups_amount") @db.Decimal(14, 2)
+closingBalance   Decimal  @map("closing_balance") @db.Decimal(14, 2)
+sentAt           DateTime @default(now()) @map("sent_at")
+
+customer         User     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+@@map("customer_monthly_bills")
+}
+
+model LedgerTransaction {
+id           String          @id @default(uuid())
+userId       String          @map("user_id")
+recordedById String          @map("recorded_by_id")
+entryType    LedgerEntryType @map("entry_type")
+amount       Decimal         @db.Decimal(14, 2)
+referenceId  String?         @map("reference_id") @db.VarChar(80)
+notes        String?         @db.Text
+createdAt    DateTime        @default(now()) @map("created_at")
+
+user         User            @relation("AccountHolderLedger", fields: [userId], references: [id])
+recordedBy   User            @relation("RecordedByLedger", fields: [recordedById], references: [id])
+
+@@index([userId, createdAt])
+@@index([recordedById, createdAt])
+@@map("ledger_transactions")
+}
+
+model AuthSession {
+id               String    @id @default(uuid())
+userId           String    @map("user_id")
+refreshTokenHash String    @unique @map("refresh_token_hash")
+csrfToken        String    @map("csrf_token")
+ipAddress        String?   @map("ip_address") @db.VarChar(45)
+userAgent        String?   @map("user_agent") @db.VarChar(255)
+expiresAt        DateTime  @map("expires_at")
+revokedAt        DateTime? @map("revoked_at")
+createdAt        DateTime  @default(now()) @map("created_at")
+
+user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+@@index([userId])
+@@map("auth_sessions")
+}

@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Amul Party Distribution",
+    "slug": "amul-party-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "amulparty",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.amulparty.distribution"
+    },
+    "android": {
+      "package": "com.amulparty.distribution",
+      "adaptiveIcon": {
+        "backgroundColor": "#1e1b4b"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-sharing",
+      "expo-status-bar"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
