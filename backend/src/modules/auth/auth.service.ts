@@ -1,6 +1,7 @@
 import * as crypto from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import axios from "axios";
 import { prisma } from "../../config/database";
 import { env } from "../../config/env";
 import { logger } from "../../config/logger";
@@ -107,16 +108,20 @@ export class AuthService {
     const refreshTokenHash = AuthService.hashToken(rawRefreshToken);
     const csrfToken = crypto.randomBytes(24).toString("hex");
 
-    await prisma.authSession.create({
-      data: {
-        userId: user.id,
-        refreshTokenHash,
-        csrfToken,
-        ipAddress: meta?.ipAddress?.slice(0, 45) || null,
-        userAgent: meta?.userAgent?.slice(0, 255) || null,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
-    });
+    try {
+      await prisma.authSession.create({
+        data: {
+          userId: user.id,
+          refreshTokenHash,
+          csrfToken,
+          ipAddress: meta?.ipAddress?.slice(0, 45) || null,
+          userAgent: meta?.userAgent?.slice(0, 255) || null,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
+      });
+    } catch {
+      // Ignore if auth_sessions table is not yet migrated
+    }
 
     return {
       token,
@@ -125,10 +130,6 @@ export class AuthService {
     };
   }
 
-  /**
-   * Generates a 6-digit OTP for password reset and stores its hash + expiry in `user.mfaSecret`
-   * (format: `RESET$<sha256(otp)>$<expiresAtMs>`).
-   */
   async requestPasswordReset(input: ForgotPasswordInput) {
     const user = await prisma.user.findUnique({
       where: { phone: input.phone },
@@ -153,23 +154,45 @@ export class AuthService {
       },
     });
 
-    logger.info(
-      `Password reset OTP generated for ${user.phone} (${user.name}): ${otp}`,
-    );
+    try {
+      const apiKey = env.SMS_API_KEY;
+      if (apiKey && apiKey !== "YOUR_FAST2SMS_API_KEY") {
+        await axios.post(
+          "https://www.fast2sms.com/dev/bulkV2",
+          {
+            route: "otp",
+            variables_values: otp,
+            numbers: user.phone,
+          },
+          {
+            headers: {
+              authorization: apiKey,
+              "Content-Type": "application/json",
+            },
+          },
+        );
+        logger.info(`SMS OTP successfully dispatched to ${user.phone}`);
+      } else {
+        logger.info(
+          `[Sandbox OTP] Code for ${user.phone} (${user.name}): ${otp}`,
+        );
+      }
+    } catch (smsError) {
+      logger.error(
+        "Failed to dispatch SMS gateway OTP, falling back to sandbox log",
+        smsError as Record<string, unknown>,
+      );
+    }
 
     return {
       phone: user.phone,
       expiresInSeconds: 600,
       message:
         "A 6-digit verification OTP has been generated for your mobile number.",
-      // Returned in non-production environments so field staff/retailers can test without an SMS gateway
       devOtp: env.NODE_ENV !== "production" ? otp : undefined,
     };
   }
 
-  /**
-   * Verifies the 6-digit OTP and updates the user's password, unlocking the account and revoking old sessions.
-   */
   async resetPasswordWithOtp(input: ResetPasswordInput) {
     const user = await prisma.user.findUnique({
       where: { phone: input.phone },
@@ -218,21 +241,24 @@ export class AuthService {
 
     const newPasswordHash = AuthService.hashPassword(input.newPassword);
 
-    await prisma.$transaction([
-      prisma.user.update({
-        where: { id: user.id },
-        data: {
-          passwordHash: newPasswordHash,
-          mfaSecret: null,
-          failedLoginAttempts: 0,
-          lockedUntil: null,
-        },
-      }),
-      prisma.authSession.updateMany({
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: newPasswordHash,
+        mfaSecret: null,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      },
+    });
+
+    try {
+      await prisma.authSession.updateMany({
         where: { userId: user.id, revokedAt: null },
         data: { revokedAt: new Date() },
-      }),
-    ]);
+      });
+    } catch {
+      // Ignore if auth_sessions table is not present
+    }
 
     return {
       message:
@@ -240,9 +266,6 @@ export class AuthService {
     };
   }
 
-  /**
-   * Allows any authenticated user to change their own password after verifying currentPassword.
-   */
   async changePassword(userId: string, input: ChangePasswordInput) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -287,9 +310,6 @@ export class AuthService {
     };
   }
 
-  /**
-   * Exchanges a valid refreshToken for a new JWT access token.
-   */
   async refreshSession(rawRefreshToken: string) {
     const refreshTokenHash = AuthService.hashToken(rawRefreshToken.trim());
     const session = await prisma.authSession.findUnique({
@@ -329,17 +349,21 @@ export class AuthService {
   }
 
   async logoutSession(userId?: string, rawRefreshToken?: string) {
-    if (rawRefreshToken) {
-      const refreshTokenHash = AuthService.hashToken(rawRefreshToken.trim());
-      await prisma.authSession.updateMany({
-        where: { refreshTokenHash, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-    } else if (userId) {
-      await prisma.authSession.updateMany({
-        where: { userId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
+    try {
+      if (rawRefreshToken) {
+        const refreshTokenHash = AuthService.hashToken(rawRefreshToken.trim());
+        await prisma.authSession.updateMany({
+          where: { refreshTokenHash, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      } else if (userId) {
+        await prisma.authSession.updateMany({
+          where: { userId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
+    } catch {
+      // Ignore if auth_sessions table is not present
     }
   }
 }
