@@ -3,13 +3,14 @@ export interface OverviewKpis {
   cashCollected: string;
   upiCollected: string;
   marketReceivables: string;
-  walletLiability: string;
-  activeSubscriptions: number;
-  activeDailyLitres: string;
-  lowWalletAlerts: number;
+  customerWalletLiability: string;
+  activeCustomerSubscriptions: number;
+  scheduledDailyLitres: string;
+  lowWalletCustomerAlerts: number;
 }
 
 export interface DsePerformanceRow {
+  id: string;
   dseId: string;
   dseName: string;
   dsePhone: string;
@@ -20,16 +21,59 @@ export interface DsePerformanceRow {
   assignedRetailers: number;
   assignedCustomers: number;
   pendingIndents: number;
+  name: string;
+  phone: string;
+  cash: number;
+  upi: number;
+  todayUpiCollected: number;
+  todayCashCollected: number;
+  todayTotalBilled: number;
+  pendingDeliveries: number;
+}
+
+export interface DseCollectionRow {
+  id: string;
+  dseId: string;
+  dseName: string;
+  dsePhone: string;
+  beat: string;
+  cashCollected: string | number;
+  upiCollected: string | number;
+  totalBilled: string | number;
+  assignedRetailers: number;
+  assignedCustomers: number;
+  pendingIndents: number;
+  name: string;
+  phone: string;
+  cash: number;
+  upi: number;
+  todayUpiCollected: number;
+  todayCashCollected: number;
+  todayTotalBilled: number;
+  pendingDeliveries: number;
+}
+
+export interface RevenueTrendPoint {
+  date: string;
+  label: string;
+  b2bRevenue: number;
+  b2cRevenue: number;
+  totalRevenue: number;
+  cashCollected: number;
+  upiCollected: number;
 }
 
 export interface OverdueRetailerRow {
+  id: string;
   retailerId: string;
   shopName: string;
   ownerName: string;
-  name?: string;
+  name: string;
   phone: string;
   assignedDseName: string | null;
   currentDue: string;
+  address?: string | null;
+  assignedDseId?: number;
 }
 
 export interface LoadingSheetRow {
@@ -67,11 +111,56 @@ export interface RecentLedgerRow {
   createdAt: string;
 }
 
+export interface RecentLedgerEntry {
+  id: string;
+  entryType: string;
+  accountHolderName: string;
+  accountHolderRole: string;
+  amount: string;
+  recordedByName: string;
+  referenceId: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface CategorySalesPoint {
+  category: string;
+  unitsSold: number;
+  revenue: number;
+}
+export interface OrderStatusPoint {
+  status: string;
+  count: number;
+  totalAmount: number;
+}
+
 export interface ExecutiveOverviewResponse {
   kpis: OverviewKpis;
   dsePerformance: DsePerformanceRow[];
+  dseCollections?: DseCollectionRow[];
+  revenueTrend?: RevenueTrendPoint[];
   overdueRetailers: OverdueRetailerRow[];
   loadingSheetDate: string;
   loadingSheet: LoadingSheetRow[];
   recentLedger: RecentLedgerRow[];
+  categorySales?: CategorySalesPoint[];
+}
+
+export interface OverviewResponseData {
+  kpis: OverviewKpis;
+
+  dsePerformance: DsePerformanceRow[];
+  dseCollections: DseCollectionRow[];
+
+  revenueTrendSeries: RevenueTrendPoint[];
+
+  overdueRetailers: OverdueRetailerRow[];
+
+  loadingDate: string;
+  nextDayLoadingSheet: LoadingSheetRow[];
+
+  recentLedgerStream: RecentLedgerEntry[];
+
+  categorySalesSeries: CategorySalesPoint[];
+  orderStatusBreakdown: OrderStatusPoint[];
 }

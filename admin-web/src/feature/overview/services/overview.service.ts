@@ -6,6 +6,7 @@ import {
   OrderStatusPoint,
   RecentLedgerEntry,
   DseCollectionRow,
+  DsePerformanceRow,
   LoadingSheetRow,
   OverdueRetailerRow,
 } from "../types/types";
@@ -37,6 +38,12 @@ export const overviewService = {
 
     const dseCollections: DseCollectionRow[] = Array.isArray(raw.dseCollections)
       ? raw.dseCollections
+      : [];
+
+    const dsePerformance: DsePerformanceRow[] = Array.isArray(
+      raw.dsePerformance,
+    )
+      ? raw.dsePerformance
       : [];
 
     const nextDayLoadingSheet: LoadingSheetRow[] = Array.isArray(
@@ -85,10 +92,11 @@ export const overviewService = {
 
     if (revenueTrendSeries.length === 0) {
       const todayRev = parseFloat(kpis.todayRevenue || "0");
-      const todayCol =
-        parseFloat(kpis.cashCollected || "0") +
-        parseFloat(kpis.upiCollected || "0");
+      const cashCollected = parseFloat(kpis.cashCollected || "0");
+      const upiCollected = parseFloat(kpis.upiCollected || "0");
+
       const todayDate = new Date();
+
       revenueTrendSeries = [
         {
           date: todayDate.toISOString().slice(0, 10),
@@ -96,37 +104,44 @@ export const overviewService = {
             month: "short",
             day: "2-digit",
           }),
-          b2bSales: todayRev,
-          b2cWallet: kpis.activeCustomerSubscriptions * 56,
-          totalCollected: todayCol,
+          b2bRevenue: todayRev,
+          b2cRevenue: 0,
+          totalRevenue: todayRev,
+          cashCollected,
+          upiCollected,
         },
       ];
     }
 
     if (categorySalesSeries.length === 0 && nextDayLoadingSheet.length > 0) {
       const catMap = new Map<string, CategorySalesPoint>();
+
       for (const item of nextDayLoadingSheet) {
-        const cat =
-          item.name.includes("Gold") || item.name.includes("Taaza")
+        const productName = (item.productName || "").toLowerCase();
+
+        const category =
+          productName.includes("gold") || productName.includes("taaza")
             ? "Milk"
-            : item.name.includes("Butter")
+            : productName.includes("butter")
               ? "Butter"
-              : item.name.includes("Paneer")
+              : productName.includes("paneer")
                 ? "Paneer"
-                : item.name.includes("Dahi")
+                : productName.includes("dahi")
                   ? "Curd"
                   : "Beverage";
-        const cur = catMap.get(cat) || {
-          category: cat,
+
+        const current = catMap.get(category) || {
+          category,
           revenue: 0,
           unitsSold: 0,
-          orderCount: 0,
         };
-        cur.unitsSold += Number(item.totalUnitsNeeded || 0);
-        cur.revenue += Number(item.totalUnitsNeeded || 0) * 30;
-        cur.orderCount += 1;
-        catMap.set(cat, cur);
+
+        current.unitsSold += Number(item.totalUnitsNeeded || 0);
+        current.revenue += Number(item.totalUnitsNeeded || 0) * 30;
+
+        catMap.set(category, current);
       }
+
       categorySalesSeries = Array.from(catMap.values());
     }
 
@@ -158,6 +173,7 @@ export const overviewService = {
       kpis,
       revenueTrendSeries,
       dseCollections,
+      dsePerformance,
       categorySalesSeries,
       orderStatusBreakdown,
       nextDayLoadingSheet,
