@@ -1,13 +1,16 @@
-import { Alert, Platform } from 'react-native';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
+import { Alert, Platform } from "react-native";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 
 /**
  * Generates and opens/shares a PDF receipt or statement.
  * On Android in Expo Go, `Print.printAsync({ html })` opens the native system Print & Save-as-PDF
  * dialog directly, avoiding Android FileProvider permission errors (`Not allowed to read file under given URL`).
  */
-export async function exportAndShareHtmlPdf(html: string, title = 'Amul_Document'): Promise<void> {
+export async function exportAndShareHtmlPdf(
+  html: string,
+  title = "Amul_Document",
+): Promise<void> {
   try {
     // Primary path on Web & Android/iOS: open native system Print / Save-as-PDF preview sheet
     await Print.printAsync({ html });
@@ -16,23 +19,26 @@ export async function exportAndShareHtmlPdf(html: string, title = 'Amul_Document
     try {
       const { uri } = await Print.printToFileAsync({ html });
       const canShare = await Sharing.isAvailableAsync();
-      if (canShare && Platform.OS === 'ios') {
+      if (canShare && Platform.OS === "ios") {
         await Sharing.shareAsync(uri, {
-          mimeType: 'application/pdf',
+          mimeType: "application/pdf",
           dialogTitle: title,
-          UTI: 'com.adobe.pdf',
+          UTI: "com.adobe.pdf",
         });
       } else {
-        Alert.alert('PDF Ready', `Document generated: ${title}`);
+        Alert.alert("PDF Ready", `Document generated: ${title}`);
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : '';
-      if (msg.toLowerCase().includes('cancel') || msg.toLowerCase().includes('dismiss')) {
+      const msg = err instanceof Error ? err.message : "";
+      if (
+        msg.toLowerCase().includes("cancel") ||
+        msg.toLowerCase().includes("dismiss")
+      ) {
         return;
       }
       Alert.alert(
-        'PDF Export Notice',
-        'Use the system Print / Save as PDF option to save this statement to your phone.'
+        "PDF Export Notice",
+        "Use the system Print / Save as PDF option to save this statement to your phone.",
       );
     }
   }
@@ -52,9 +58,9 @@ export async function generateAndSharePdf(options: {
           <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; color: #475569; font-weight: 600;">${label}</td>
           <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; text-align: right; font-family: monospace; font-weight: 700; color: #0f172a;">${value}</td>
         </tr>
-      `
+      `,
     )
-    .join('');
+    .join("");
 
   const html = `
     <!DOCTYPE html>

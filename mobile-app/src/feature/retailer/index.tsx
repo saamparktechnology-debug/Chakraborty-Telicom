@@ -49,40 +49,315 @@ export default function RetailerFeatureScreen() {
   const handleExportPassbookPdf = async () => {
     const shopTitle =
       passbook?.shopName || user?.shopName || user?.name || "Retailer Shop";
-    const rowsHtml = ledger
-      .map(
-        (l) => `
+    const shopPhone = user?.phone || "-";
+    const shopAddress =
+      (user as any)?.address ||
+      (passbook as any)?.address ||
+      "Purba Medinipur, West Bengal";
+
+    // Calculate debit / credit totals for the passbook header metrics
+    let totalDebit = 0;
+    let totalCredit = 0;
+
+    ledger.forEach((l) => {
+      const isDebit =
+        l.entryType === "INVOICE_DEBIT" ||
+        l.entryType.toLowerCase().includes("debit");
+      if (isDebit) {
+        totalDebit += l.amount;
+      } else {
+        totalCredit += l.amount;
+      }
+    });
+
+    const rowsHtml =
+      ledger.length === 0
+        ? `
         <tr>
-          <td>${l.createdAt.slice(0, 10)}</td>
-          <td>${l.entryType}</td>
-          <td>${l.referenceId || "-"}</td>
-          <td>${l.notes || "-"}</td>
-          <td style="text-align:right;font-weight:bold;">₹${l.amount.toFixed(2)}</td>
-        </tr>`,
-      )
-      .join("");
+          <td colspan="6" style="padding: 24px; text-align: center; color: #94A3B8; font-size: 13px;">
+            No transactions found in this period.
+          </td>
+        </tr>
+      `
+        : ledger
+            .map((l, index) => {
+              const isDebit =
+                l.entryType === "INVOICE_DEBIT" ||
+                l.entryType.toLowerCase().includes("debit");
+              const entryBadgeColor = isDebit ? "#E11D48" : "#059669";
+              const entryBadgeBg = isDebit ? "#FFE4E6" : "#DCFCE7";
+              const rowBg = index % 2 === 1 ? "background-color: #F8FAFC;" : "";
+
+              return `
+            <tr style="border-bottom: 1px solid #E2E8F0; ${rowBg}">
+              <td style="padding: 10px 12px; color: #334155; font-weight: 600; white-space: nowrap;">
+                ${l.createdAt.slice(0, 10)}
+              </td>
+              <td style="padding: 10px 12px;">
+                <span style="background: ${entryBadgeBg}; color: ${entryBadgeColor}; font-size: 10.5px; font-weight: 800; padding: 3px 8px; border-radius: 6px; letter-spacing: 0.4px;">
+                  ${l.entryType}
+                </span>
+              </td>
+              <td style="padding: 10px 12px; font-family: monospace; font-size: 11.5px; color: #475569; font-weight: 700;">
+                ${l.referenceId || "—"}
+              </td>
+              <td style="padding: 10px 12px; color: #1E293B; font-size: 12px;">
+                ${l.notes || "Khata transaction"}
+              </td>
+              <td style="padding: 10px 12px; text-align: right; color: ${isDebit ? "#E11D48" : "#94A3B8"}; font-weight: ${isDebit ? "800" : "500"}; font-family: monospace; font-size: 12.5px;">
+                ${isDebit ? `+ ₹${l.amount.toFixed(2)}` : "—"}
+              </td>
+              <td style="padding: 10px 12px; text-align: right; color: ${!isDebit ? "#059669" : "#94A3B8"}; font-weight: ${!isDebit ? "800" : "500"}; font-family: monospace; font-size: 12.5px;">
+                ${!isDebit ? `− ₹${l.amount.toFixed(2)}` : "—"}
+              </td>
+            </tr>`;
+            })
+            .join("");
+
+    const currentDateStr = new Date().toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
 
     const html = `
-      <html>
-        <body style="font-family: sans-serif; padding: 24px;">
-          <h2>AMUL PARTY — B2B RETAILER KHATA PASSBOOK</h2>
-          <p><strong>Shop:</strong> ${shopTitle} (${user?.phone || ""})</p>
-          <p><strong>Current Running Khata Due:</strong> ₹${currentDue.toFixed(2)}</p>
-          <table border="1" cellspacing="0" cellpadding="8" width="100%" style="border-collapse:collapse;font-size:12px;">
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <title>Khata Passbook - ${shopTitle}</title>
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 14mm 16mm;
+            }
+            * {
+              box-sizing: border-box;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            }
+            body {
+              color: #0F172A;
+              background-color: #FFFFFF;
+              margin: 0;
+              padding: 0;
+              font-size: 12.5px;
+              line-height: 1.5;
+            }
+            .header-bar {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              border-bottom: 2.5px solid #003399;
+              padding-bottom: 14px;
+              margin-bottom: 18px;
+            }
+            .brand-title {
+              font-size: 26px;
+              font-weight: 900;
+              color: #003399;
+              letter-spacing: -0.5px;
+              margin: 0;
+            }
+            .brand-subtitle {
+              font-size: 11px;
+              font-weight: 800;
+              color: #E11D48;
+              text-transform: uppercase;
+              letter-spacing: 1.2px;
+              margin-top: 3px;
+            }
+            .doc-tag {
+              background: #F1F5F9;
+              border: 1px solid #CBD5E1;
+              border-radius: 8px;
+              padding: 8px 14px;
+              text-align: right;
+            }
+            .doc-type {
+              font-size: 11px;
+              font-weight: 800;
+              color: #003399;
+              text-transform: uppercase;
+              letter-spacing: 0.6px;
+            }
+            .doc-date {
+              font-size: 11px;
+              color: #64748B;
+              margin-top: 3px;
+              font-weight: 600;
+            }
+            .address-container {
+              display: flex;
+              justify-content: space-between;
+              gap: 16px;
+              margin-bottom: 18px;
+            }
+            .address-box {
+              flex: 1;
+              background: #F8FAFC;
+              border: 1px solid #E2E8F0;
+              border-radius: 10px;
+              padding: 11px 14px;
+            }
+            .address-header {
+              font-size: 10.5px;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 0.8px;
+              color: #003399;
+              border-bottom: 1px solid #E2E8F0;
+              padding-bottom: 5px;
+              margin-bottom: 6px;
+            }
+            .address-title {
+              font-size: 13px;
+              font-weight: 800;
+              color: #0F172A;
+              margin-bottom: 3px;
+            }
+            .address-detail {
+              font-size: 11px;
+              color: #475569;
+              line-height: 1.45;
+            }
+            .metrics-grid {
+              display: flex;
+              gap: 12px;
+              margin-bottom: 20px;
+            }
+            .metric-card {
+              flex: 1;
+              border: 1px solid #E2E8F0;
+              border-radius: 10px;
+              padding: 10px 14px;
+              background: #F8FAFC;
+            }
+            .metric-card.due {
+              background: #FFF1F2;
+              border-color: #FECDD3;
+            }
+            .metric-label {
+              font-size: 10px;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              color: #64748B;
+            }
+            .metric-card.due .metric-label {
+              color: #9F1239;
+            }
+            .metric-value {
+              font-size: 18px;
+              font-weight: 900;
+              color: #0F172A;
+              margin-top: 3px;
+            }
+            .metric-card.due .metric-value {
+              color: #E11D48;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              border-radius: 8px;
+              overflow: hidden;
+            }
+            th {
+              background: #003399;
+              color: #FFFFFF;
+              font-size: 10.5px;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              padding: 9px 12px;
+            }
+            .footer-note {
+              margin-top: 26px;
+              padding-top: 12px;
+              border-top: 1px solid #E2E8F0;
+              font-size: 10.5px;
+              color: #94A3B8;
+              text-align: center;
+            }
+          </style>
+        </head>
+        <body>
+          <!-- Top Header -->
+          <div class="header-bar">
+            <div>
+              <h1 class="brand-title">AMUL</h1>
+              <div class="brand-subtitle">The Taste of India • Wholesale Khata Passbook</div>
+            </div>
+            <div class="doc-tag">
+              <div class="doc-type">Retailer Statement</div>
+              <div class="doc-date">Generated: ${currentDateStr}</div>
+            </div>
+          </div>
+
+          <!-- Biller & Retailer Information -->
+          <div class="address-container">
+            <div class="address-box">
+              <div class="address-header">Distributor (Biller)</div>
+              <div class="address-title">CHAKRABORTY TELECOM</div>
+              <div class="address-detail">
+                Vendor Code: 1027430<br/>
+                PO-HAUR, PURUL, HAUR, Vill-PURUL<br/>
+                HAUR - 721131, PURBA MEDINIPUR, WB<br/>
+                <strong>PAN:</strong> BTKPC8759G | <strong>GSTIN:</strong> 19BTKPC8759G1Z6
+              </div>
+            </div>
+
+            <div class="address-box">
+              <div class="address-header">Account Holder (Customer)</div>
+              <div class="address-title">${shopTitle}</div>
+              <div class="address-detail">
+                <strong>Phone:</strong> ${shopPhone}<br/>
+                <strong>Address:</strong> ${shopAddress}<br/>
+                <strong>Account Type:</strong> Running B2B Khata Account<br/>
+                <strong>State:</strong> West Bengal [19]
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Balance Overview Bar -->
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <div class="metric-label">Total Bills (Debits)</div>
+              <div class="metric-value" style="color: #E11D48;">+ ₹${totalDebit.toFixed(2)}</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Total Payments (Credits)</div>
+              <div class="metric-value" style="color: #059669;">− ₹${totalCredit.toFixed(2)}</div>
+            </div>
+            <div class="metric-card due">
+              <div class="metric-label">Current Running Due</div>
+              <div class="metric-value">₹${currentDue.toFixed(2)}</div>
+            </div>
+          </div>
+
+          <!-- Ledger Table -->
+          <table>
             <thead>
-              <tr style="background:#f1f5f9;">
-                <th>Date</th>
-                <th>Entry Type</th>
-                <th>Reference</th>
-                <th>Details</th>
-                <th>Amount (INR)</th>
+              <tr>
+                <th style="text-align: left; width: 85px;">Date</th>
+                <th style="text-align: left; width: 120px;">Type</th>
+                <th style="text-align: left; width: 100px;">Reference</th>
+                <th style="text-align: left;">Particulars / Notes</th>
+                <th style="text-align: right; width: 100px;">Debit (+)</th>
+                <th style="text-align: right; width: 100px;">Credit (−)</th>
               </tr>
             </thead>
-            <tbody>${rowsHtml}</tbody>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
           </table>
+
+          <div class="footer-note">
+            This is an official system-generated running statement of accounts. For any discrepancy, contact Chakraborty Telecom.
+          </div>
         </body>
       </html>
     `;
+
     await exportAndShareHtmlPdf(
       html,
       `Khata_Passbook_${shopTitle.replace(/\s+/g, "_")}.pdf`,
@@ -92,53 +367,341 @@ export default function RetailerFeatureScreen() {
   const handleExportOrderInvoicePdf = async (
     order: RetailerOrderItemSummary,
   ) => {
-    const shopTitle =
+    const customerName =
       passbook?.shopName || user?.shopName || user?.name || "Retailer Shop";
+    const customerPhone = user?.phone || "-";
+    const customerAddress =
+      (user as any)?.address ||
+      (passbook as any)?.address ||
+      "Purba Medinipur, West Bengal";
+
     const itemsHtml = order.items
       .map(
-        (i) => `
-        <tr>
-          <td>${i.productName}</td>
-          <td style="text-align:center;">${i.deliveredQty || i.indentedQty}</td>
-          <td style="text-align:right;">₹${i.unitPrice.toFixed(2)}</td>
-          <td style="text-align:right;">${order.isGstBill ? `${i.gstPercentage}%` : "0%"}</td>
-          <td style="text-align:right;font-weight:bold;">₹${i.lineTotal.toFixed(2)}</td>
+        (i, index) => `
+        <tr style="border-bottom: 1px solid #E2E8F0; ${index % 2 === 1 ? "background-color: #F8FAFC;" : ""}">
+          <td style="padding: 10px 12px; font-weight: 600; color: #1E293B;">${i.productName}</td>
+          <td style="padding: 10px 12px; text-align: center; color: #334155; font-weight: 600;">${i.deliveredQty || i.indentedQty}</td>
+          <td style="padding: 10px 12px; text-align: right; color: #334155;">₹${i.unitPrice.toFixed(2)}</td>
+          <td style="padding: 10px 12px; text-align: right; color: #64748B;">${order.isGstBill ? `${i.gstPercentage}%` : "0%"}</td>
+          <td style="padding: 10px 12px; text-align: right; font-weight: 800; color: #0F172A;">₹${i.lineTotal.toFixed(2)}</td>
         </tr>`,
       )
       .join("");
 
+    const totalPaid = (order.paidUpi || 0) + (order.paidCash || 0);
+
     const html = `
-      <html>
-        <body style="font-family: sans-serif; padding: 24px;">
-          <h2>AMUL PARTY — ${order.isGstBill ? "TAX INVOICE (GST INCL.)" : "BILL OF SUPPLY (NON-GST)"}</h2>
-          <p><strong>Invoice #:</strong> ${order.invoiceNumber} | <strong>Date:</strong> ${order.deliveryDate}</p>
-          <p><strong>Retailer:</strong> ${shopTitle}</p>
-          <table border="1" cellspacing="0" cellpadding="8" width="100%" style="border-collapse:collapse;font-size:12px;margin-top:12px;">
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <title>${order.invoiceNumber}</title>
+          <style>
+            @page {
+              size: A4;
+              margin: 16mm;
+            }
+            * {
+              box-sizing: border-box;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            }
+            body {
+              color: #0F172A;
+              background-color: #FFFFFF;
+              margin: 0;
+              padding: 0;
+              font-size: 13px;
+              line-height: 1.5;
+            }
+            .header-bar {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              border-bottom: 2.5px solid #003399;
+              padding-bottom: 16px;
+              margin-bottom: 20px;
+            }
+            .brand-title {
+              font-size: 26px;
+              font-weight: 900;
+              color: #003399;
+              letter-spacing: -0.5px;
+              margin: 0;
+            }
+            .brand-subtitle {
+              font-size: 11px;
+              font-weight: 700;
+              color: #E11D48;
+              text-transform: uppercase;
+              letter-spacing: 1.2px;
+              margin-top: 3px;
+            }
+            .invoice-tag {
+              background: #F1F5F9;
+              border: 1px solid #CBD5E1;
+              border-radius: 8px;
+              padding: 8px 14px;
+              text-align: right;
+            }
+            .invoice-type {
+              font-size: 11px;
+              font-weight: 800;
+              color: ${order.isGstBill ? "#003399" : "#475569"};
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            .invoice-number {
+              font-size: 16px;
+              font-weight: 900;
+              color: #0F172A;
+              margin-top: 2px;
+            }
+            .invoice-date {
+              font-size: 11px;
+              color: #64748B;
+              margin-top: 2px;
+            }
+            .address-container {
+              display: flex;
+              justify-content: space-between;
+              gap: 20px;
+              margin-bottom: 22px;
+            }
+            .address-box {
+              flex: 1;
+              background: #F8FAFC;
+              border: 1px solid #E2E8F0;
+              border-radius: 10px;
+              padding: 12px 14px;
+            }
+            .address-header {
+              font-size: 11px;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 0.8px;
+              color: #003399;
+              border-bottom: 1px solid #E2E8F0;
+              padding-bottom: 6px;
+              margin-bottom: 6px;
+            }
+            .address-title {
+              font-size: 13.5px;
+              font-weight: 800;
+              color: #0F172A;
+              margin-bottom: 4px;
+            }
+            .address-detail {
+              font-size: 11.5px;
+              color: #475569;
+              line-height: 1.45;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 10px;
+              border-radius: 8px;
+              overflow: hidden;
+            }
+            th {
+              background: #003399;
+              color: #FFFFFF;
+              font-size: 11px;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.6px;
+              padding: 10px 12px;
+            }
+            .summary-section {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              margin-top: 20px;
+              gap: 20px;
+            }
+            .payment-box {
+              flex: 1;
+              background: #F8FAFC;
+              border: 1px dashed #CBD5E1;
+              border-radius: 10px;
+              padding: 12px 14px;
+            }
+            .totals-box {
+              width: 320px;
+              background: #F8FAFC;
+              border: 1px solid #E2E8F0;
+              border-radius: 10px;
+              padding: 12px 16px;
+            }
+            .summary-line {
+              display: flex;
+              justify-content: space-between;
+              padding: 4px 0;
+              font-size: 12px;
+              color: #475569;
+            }
+            .summary-line.bold {
+              font-weight: 700;
+              color: #0F172A;
+            }
+            .summary-line.highlight {
+              border-top: 1.5px dashed #CBD5E1;
+              margin-top: 6px;
+              padding-top: 8px;
+              font-size: 14px;
+              font-weight: 900;
+              color: #003399;
+            }
+            .closing-due-box {
+              background: #FFF1F2;
+              border: 1.5px solid #FECDD3;
+              border-radius: 8px;
+              padding: 8px 12px;
+              margin-top: 10px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            }
+            .closing-due-label {
+              font-size: 12px;
+              font-weight: 800;
+              color: #9F1239;
+            }
+            .closing-due-value {
+              font-size: 16px;
+              font-weight: 900;
+              color: #E11D48;
+            }
+            .footer-note {
+              margin-top: 30px;
+              padding-top: 14px;
+              border-top: 1px solid #E2E8F0;
+              font-size: 10.5px;
+              color: #94A3B8;
+              text-align: center;
+            }
+          </style>
+        </head>
+        <body>
+          <!-- Top Header -->
+          <div class="header-bar">
+            <div>
+              <h1 class="brand-title">AMUL</h1>
+              <div class="brand-subtitle">The Taste of India • Wholesale Distribution</div>
+            </div>
+            <div class="invoice-tag">
+              <div class="invoice-type">${order.isGstBill ? "TAX INVOICE (GST INCL.)" : "BILL OF SUPPLY"}</div>
+              <div class="invoice-number">${order.invoiceNumber}</div>
+              <div class="invoice-date">Date: ${order.deliveryDate}</div>
+            </div>
+          </div>
+
+          <!-- Biller and Customer Info -->
+          <div class="address-container">
+            <!-- Biller Info (Extracted from document) -->
+            <div class="address-box">
+              <div class="address-header">Billed By (Supplier)</div>
+              <div class="address-title">CHAKRABORTY TELECOM</div>
+              <div class="address-detail">
+                Vendor Code: 1027430<br/>
+                PO-HAUR, PURUL, HAUR, Vill-PURUL<br/>
+                HAUR - 721131, PURBA MEDINIPUR<br/>
+                WEST BENGAL [State Code: 19]<br/>
+                <strong>PAN:</strong> BTKPC8759G<br/>
+                <strong>GSTIN:</strong> 19BTKPC8759G1Z6
+              </div>
+            </div>
+
+            <!-- Customer Billing Address -->
+            <div class="address-box">
+              <div class="address-header">Billed To (Customer)</div>
+              <div class="address-title">${customerName}</div>
+              <div class="address-detail">
+                <strong>Contact:</strong> ${customerPhone}<br/>
+                <strong>Address:</strong> ${customerAddress}<br/>
+                <strong>State:</strong> West Bengal [19]<br/>
+                <strong>Account Type:</strong> B2B Retailer Khata
+              </div>
+            </div>
+          </div>
+
+          <!-- Items Table -->
+          <table>
             <thead>
-              <tr style="background:#f1f5f9;">
-                <th>Product</th>
-                <th>Qty</th>
-                <th>Rate</th>
-                <th>GST</th>
-                <th>Total</th>
+              <tr>
+                <th style="text-align: left;">Product Description</th>
+                <th style="text-align: center; width: 60px;">Qty</th>
+                <th style="text-align: right; width: 85px;">Rate</th>
+                <th style="text-align: right; width: 60px;">GST</th>
+                <th style="text-align: right; width: 95px;">Total (INR)</th>
               </tr>
             </thead>
-            <tbody>${itemsHtml}</tbody>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
           </table>
-          <div style="margin-top:16px;font-size:13px;">
-            <p>Previous Running Due: <strong>₹${order.previousDueSnapshot.toFixed(2)}</strong></p>
-            ${
-              order.isGstBill
-                ? `<p>Taxable Base: ₹${order.taxableSubtotal.toFixed(2)} + Single GST: ₹${order.gstAmount.toFixed(2)} = <strong>₹${order.subtotal.toFixed(2)}</strong></p>`
-                : `<p>Today's Bill Subtotal: <strong>₹${order.subtotal.toFixed(2)}</strong></p>`
-            }
-            <p>Total Payable: <strong>₹${order.totalPayable.toFixed(2)}</strong></p>
-            <p>Paid via UPI: ₹${order.paidUpi.toFixed(2)} | Paid via Cash: ₹${order.paidCash.toFixed(2)}</p>
-            <p style="font-size:15px;color:#e11d48;"><strong>Closing Due Carried Forward: ₹${order.closingDue.toFixed(2)}</strong></p>
+
+          <!-- Financial Summary -->
+          <div class="summary-section">
+            <!-- Payment breakdown notes -->
+            <div class="payment-box">
+              <div style="font-size: 11px; font-weight: 800; color: #475569; text-transform: uppercase; margin-bottom: 6px;">Payment Breakdown</div>
+              <div class="summary-line"><span>UPI Settlement:</span> <strong>₹${order.paidUpi.toFixed(2)}</strong></div>
+              <div class="summary-line"><span>Cash Received:</span> <strong>₹${order.paidCash.toFixed(2)}</strong></div>
+              <div class="summary-line bold"><span>Total Paid Today:</span> <span style="color: #059669;">₹${totalPaid.toFixed(2)}</span></div>
+              <div style="margin-top: 10px; font-size: 10.5px; color: #64748B;">
+                * All Khata adjustments reflect automatically in the Retailer Passbook.
+              </div>
+            </div>
+
+            <!-- Calculation Totals -->
+            <div class="totals-box">
+              <div class="summary-line">
+                <span>Previous Khata Due:</span>
+                <span>₹${order.previousDueSnapshot.toFixed(2)}</span>
+              </div>
+              ${
+                order.isGstBill
+                  ? `
+                  <div class="summary-line">
+                    <span>Taxable Value:</span>
+                    <span>₹${order.taxableSubtotal.toFixed(2)}</span>
+                  </div>
+                  <div class="summary-line">
+                    <span>GST Output:</span>
+                    <span>₹${order.gstAmount.toFixed(2)}</span>
+                  </div>
+                  `
+                  : ""
+              }
+              <div class="summary-line bold">
+                <span>Today's Bill Subtotal:</span>
+                <span>₹${order.subtotal.toFixed(2)}</span>
+              </div>
+              <div class="summary-line highlight">
+                <span>Total Amount Payable:</span>
+                <span>₹${order.totalPayable.toFixed(2)}</span>
+              </div>
+              <div class="summary-line" style="color: #059669;">
+                <span>Total Paid Today:</span>
+                <span>− ₹${totalPaid.toFixed(2)}</span>
+              </div>
+
+              <!-- Closing Due Pill -->
+              <div class="closing-due-box">
+                <span class="closing-due-label">Closing Khata Due:</span>
+                <span class="closing-due-value">₹${order.closingDue.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Footer -->
+          <div class="footer-note">
+            This is a computer-generated invoice and requires no physical signature. Thank you for your business!
           </div>
         </body>
       </html>
     `;
+
     await exportAndShareHtmlPdf(html, `${order.invoiceNumber}.pdf`);
   };
 
@@ -186,9 +749,9 @@ export default function RetailerFeatureScreen() {
                 <Text style={styles.exportPdfBtnText}>📄 Export PDF</Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.heroFormula}>
+            {/* <Text style={styles.heroFormula}>
               Formula: Previous Due + Today&apos;s Bill − (UPI + Cash Paid)
-            </Text>
+            </Text> */}
           </View>
 
           {/* 3 Pill Tabs */}
