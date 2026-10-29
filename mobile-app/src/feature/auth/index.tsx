@@ -83,7 +83,7 @@ export default function LoginFeatureScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Top Bar */}
-          <View style={styles.topRow}>
+          {/* <View style={styles.topRow}>
             <TouchableOpacity
               onPress={() => setServerModalOpen(true)}
               style={[
@@ -134,7 +134,7 @@ export default function LoginFeatureScreen() {
                 {isDark ? "☀️ Light" : "🌙 Dark"}
               </Text>
             </TouchableOpacity>
-          </View>
+          </View> */}
 
           {/* Brand Header */}
           <View style={styles.brandBox}>
